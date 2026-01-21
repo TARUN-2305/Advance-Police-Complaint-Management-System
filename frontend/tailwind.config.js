@@ -7,13 +7,30 @@ export default {
     theme: {
         extend: {
             colors: {
-                brand: {
-                    50: '#f0f9ff',
-                    100: '#e0f2fe',
-                    500: '#0ea5e9', // Sky blue
-                    600: '#0284c7',
-                    900: '#0c4a6e',
+                // Detected from Mockups
+                header: '#0B1C2D',      // Deep Navy Blue
+                accent: '#C3B091',      // Khaki/Gold
+                background: '#F5F6FA',  // Light Grey
+
+                // Status Colors (Pills)
+                status: {
+                    pending: '#F59E0B',   // Yellow
+                    investigation: '#3B82F6', // Blue
+                    closed: '#10B981',    // Green
+                },
+
+                // Visibility Tags
+                visibility: {
+                    public: '#3B82F6',    // Blue
+                    victim: '#F97316',    // Orange
+                    private: '#EF4444',   // Red
                 }
+            },
+            fontFamily: {
+                sans: ['Inter', 'Roboto', 'sans-serif'],
+            },
+            boxShadow: {
+                'card': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
             }
         },
     },

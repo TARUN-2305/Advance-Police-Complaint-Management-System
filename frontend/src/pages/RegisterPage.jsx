@@ -1,78 +1,70 @@
 import { useState, useContext } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import AuthContext from '../context/AuthContext';
-import { Shield, User, Mail, Phone, MapPin, Lock } from 'lucide-react';
+import { ArrowLeft, UserPlus } from 'lucide-react';
 
 const RegisterPage = () => {
-    const [formData, setFormData] = useState({
-        full_name: '', email: '', password: '', phone_number: '', address: ''
-    });
-    const { registerVictim } = useContext(AuthContext);
     const navigate = useNavigate();
-    const [error, setError] = useState('');
-
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
+    const { registerVictim } = useContext(AuthContext);
+    const [formData, setFormData] = useState({
+        full_name: '', email: '', phone_number: '', address: '', password: ''
+    });
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError('');
         const res = await registerVictim(formData);
-        if (res.success) {
-            navigate('/victim-dashboard');
-        } else {
-            setError(res.message);
-        }
+        if (res.success) navigate('/victim-dashboard');
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-slate-900 px-4 py-8">
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
-                <div className="bg-brand-900 p-6 text-center">
-                    <Shield className="w-12 h-12 text-brand-500 mx-auto mb-2" />
-                    <h1 className="text-2xl font-bold text-white">Citizen Registration</h1>
-                    <p className="text-brand-100 text-sm">Create your secure account</p>
-                </div>
-
-                <div className="p-8">
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        {error && <div className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</div>}
-
-                        {[
-                            { name: 'full_name', placeholder: 'Full Name', icon: User, type: 'text' },
-                            { name: 'email', placeholder: 'Email Address', icon: Mail, type: 'email' },
-                            { name: 'password', placeholder: 'Password', icon: Lock, type: 'password' },
-                            { name: 'phone_number', placeholder: 'Phone Number', icon: Phone, type: 'text' },
-                            { name: 'address', placeholder: 'Full Address', icon: MapPin, type: 'text' },
-                        ].map((field) => (
-                            <div key={field.name}>
-                                <div className="relative">
-                                    <field.icon className="w-5 h-5 absolute left-3 top-2.5 text-gray-400" />
-                                    <input
-                                        type={field.type}
-                                        name={field.name}
-                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                                        placeholder={field.placeholder}
-                                        value={formData[field.name]}
-                                        onChange={handleChange}
-                                        required
-                                    />
-                                </div>
-                            </div>
-                        ))}
-
-                        <button
-                            type="submit"
-                            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-lg transition-colors"
-                        >
-                            Register
+        <div className="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl">
+                <div className="md:flex">
+                    <div className="p-8 w-full">
+                        <button onClick={() => navigate('/login/citizen')} className="flex items-center text-gray-500 hover:text-police-blue mb-6">
+                            <ArrowLeft className="w-4 h-4 mr-1" /> Back to Login
                         </button>
+                        <div className="uppercase tracking-wide text-sm text-police-blue font-semibold mb-1">New Registration</div>
+                        <h1 className="block mt-1 text-lg leading-tight font-medium text-black">Citizen Account Setup</h1>
 
-                        <p className="text-center text-sm text-gray-600 mt-4">
-                            Already have an account? <Link to="/" className="text-brand-600 font-medium hover:underline">Login here</Link>
-                        </p>
-                    </form>
+                        <form className="mt-6 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6" onSubmit={handleSubmit}>
+                            <div className="sm:col-span-6">
+                                <label className="block text-sm font-medium text-gray-700">Full Name</label>
+                                <input type="text" required className="mt-1 focus:ring-police-blue focus:border-police-blue block w-full shadow-sm sm:text-sm border-gray-300 rounded-md py-2 px-3 border"
+                                    onChange={e => setFormData({ ...formData, full_name: e.target.value })} />
+                            </div>
+
+                            <div className="sm:col-span-3">
+                                <label className="block text-sm font-medium text-gray-700">Email</label>
+                                <input type="email" required className="mt-1 focus:ring-police-blue focus:border-police-blue block w-full shadow-sm sm:text-sm border-gray-300 rounded-md py-2 px-3 border"
+                                    onChange={e => setFormData({ ...formData, email: e.target.value })} />
+                            </div>
+
+                            <div className="sm:col-span-3">
+                                <label className="block text-sm font-medium text-gray-700">Phone</label>
+                                <input type="tel" required className="mt-1 focus:ring-police-blue focus:border-police-blue block w-full shadow-sm sm:text-sm border-gray-300 rounded-md py-2 px-3 border"
+                                    onChange={e => setFormData({ ...formData, phone_number: e.target.value })} />
+                            </div>
+
+                            <div className="sm:col-span-6">
+                                <label className="block text-sm font-medium text-gray-700">Address</label>
+                                <textarea required rows="3" className="mt-1 focus:ring-police-blue focus:border-police-blue block w-full shadow-sm sm:text-sm border-gray-300 rounded-md py-2 px-3 border"
+                                    onChange={e => setFormData({ ...formData, address: e.target.value })}></textarea>
+                            </div>
+
+                            <div className="sm:col-span-6">
+                                <label className="block text-sm font-medium text-gray-700">Password</label>
+                                <input type="password" required className="mt-1 focus:ring-police-blue focus:border-police-blue block w-full shadow-sm sm:text-sm border-gray-300 rounded-md py-2 px-3 border"
+                                    onChange={e => setFormData({ ...formData, password: e.target.value })} />
+                            </div>
+
+                            <div className="sm:col-span-6">
+                                <button type="submit" className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-police-blue hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-police-blue">
+                                    Create Account
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>

@@ -7,92 +7,50 @@ async function main() {
     console.log('🌱 Start seeding...');
 
     // 1. Create Police Stations
-    const station1 = await prisma.policeStation.create({
-        data: {
-            station_name: 'Central Police Station',
-            location: '123 Main St, Downtown',
-            contact_number: '100-101'
+    const stationsData = [
+        { station_name: 'Kengeri Police Station', location: 'Kengeri', contact_number: '080-1001' },
+        { station_name: 'Jayanagar Police Station', location: 'Jayanagar', contact_number: '080-1002' },
+        { station_name: 'Indiranagar Police Station', location: 'Indiranagar', contact_number: '080-1003' },
+        { station_name: 'Koramangala Police Station', location: 'Koramangala', contact_number: '080-1004' }
+    ];
+
+    const stations = [];
+    for (const s of stationsData) {
+        const existingStation = await prisma.policeStation.findFirst({ where: { station_name: s.station_name } });
+        if (!existingStation) {
+            stations.push(await prisma.policeStation.create({ data: s }));
+        } else {
+            stations.push(existingStation);
         }
-    });
+    }
+    console.log('✅ 4 Bangalore Stations created/verified');
 
-    const station2 = await prisma.policeStation.create({
-        data: {
-            station_name: 'North Division Station',
-            location: '456 North Ave, Uptown',
-            contact_number: '100-102'
-        }
-    });
-
-    console.log('✅ Stations created');
-
-    // 2. Create Officers
+    // 2. Create Officers for each Station
     const password = await bcrypt.hash('password123', 10);
 
-    const officer1 = await prisma.policeOfficer.create({
-        data: {
-            full_name: 'Inspector Vijay',
-            badge_number: 'COP-001',
-            email: 'vijay@police.com',
-            password_hash: password,
-            rank: 'Inspector',
-            station_id: station1.station_id
+    const officersData = [
+        { name: 'Inspector Ramesh', badge: 'COP-KEN-01', email: 'ramesh@kengeri.com', stationId: stations[0].station_id },
+        { name: 'Inspector Suresh', badge: 'COP-JAY-01', email: 'suresh@jayanagar.com', stationId: stations[1].station_id },
+        { name: 'Inspector Anita', badge: 'COP-IND-01', email: 'anita@indiranagar.com', stationId: stations[2].station_id },
+        { name: 'Inspector Deepa', badge: 'COP-KOR-01', email: 'deepa@koramangala.com', stationId: stations[3].station_id }
+    ];
+
+    for (const o of officersData) {
+        const existing = await prisma.policeOfficer.findUnique({ where: { badge_number: o.badge } });
+        if (!existing) {
+            await prisma.policeOfficer.create({
+                data: {
+                    full_name: o.name,
+                    badge_number: o.badge,
+                    email: o.email,
+                    password_hash: password,
+                    rank: 'Inspector',
+                    station_id: o.stationId
+                }
+            });
         }
-    });
-
-    const officer2 = await prisma.policeOfficer.create({
-        data: {
-            full_name: 'Sub-Inspector Ravi',
-            badge_number: 'COP-002',
-            email: 'ravi@police.com',
-            password_hash: password,
-            rank: 'Sub-Inspector',
-            station_id: station1.station_id
-        }
-    });
-
-    const officer3 = await prisma.policeOfficer.create({
-        data: {
-            full_name: 'Inspector Priya',
-            badge_number: 'COP-003',
-            email: 'priya@police.com',
-            password_hash: password,
-            rank: 'Inspector',
-            station_id: station2.station_id
-        }
-    });
-
-    console.log('✅ Officers created');
-
-    // 3. Create a Victim
-    const victim = await prisma.victim.create({
-        data: {
-            full_name: 'Rahul Sharma',
-            email: 'rahul@example.com',
-            password_hash: password,
-            phone_number: '9876543210',
-            address: '77 Sunset Blvd'
-        }
-    });
-
-    console.log('✅ Victim created');
-
-    // 4. Create a Sample Complaint
-    const complaint = await prisma.complaint.create({
-        data: {
-            victim_id: victim.victim_id,
-            station_id: station1.station_id,
-            assigned_officer_id: officer1.officer_id,
-            title: 'Lost Wallet at Metro Station',
-            description: 'I lost my brown leather wallet containing my ID and cards at the central metro station around 5 PM.',
-            incident_location: 'Central Metro Station',
-            category: 'THEFT',
-            severity_level: 'LOW',
-            current_status: 'PENDING',
-            visibility: 'PRIVATE'
-        }
-    });
-
-    console.log(`✅ Sample Complaint created with ID: ${complaint.complaint_id}`);
+    }
+    console.log('✅ Officers created for all stations');
 }
 
 main()
