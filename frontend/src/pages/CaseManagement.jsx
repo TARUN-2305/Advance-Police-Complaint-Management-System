@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
-import { ChevronLeft, Upload, Send, Calendar, Loader } from 'lucide-react';
+import { ChevronLeft, Upload, Send, Calendar, Loader, ArrowRightLeft, Lock, FileText, Download } from 'lucide-react';
 
 const CaseManagement = () => {
     const { id } = useParams();
@@ -16,12 +16,28 @@ const CaseManagement = () => {
     const [summonReason, setSummonReason] = useState('');
     const [uploading, setUploading] = useState(false);
 
+    // Transfer State
+    const [stations, setStations] = useState([]);
+    const [isTransferring, setIsTransferring] = useState(false);
+    const [transferTarget, setTransferTarget] = useState('');
+    const [transferReason, setTransferReason] = useState('');
+
+    // Internal Notes State
+    const [notes, setNotes] = useState([]);
+    const [noteContent, setNoteContent] = useState('');
+
     useEffect(() => {
         loadComplaint();
+        loadNotes();
+        api.get('/stations').then(res => setStations(res.data)).catch(console.error);
     }, [id]);
 
     const loadComplaint = () => {
         api.get(`/complaints/${id}`).then(res => setComplaint(res.data)).catch(console.error);
+    }
+
+    const loadNotes = () => {
+        api.get(`/complaints/${id}/notes`).then(res => setNotes(res.data)).catch(err => console.error("Failed to load notes", err));
     }
 
     if (!complaint) return <div className="p-10 text-center">Loading Case Files...</div>;
@@ -69,8 +85,102 @@ const CaseManagement = () => {
         }
     };
 
+    const handleTransfer = async () => {
+        if (!transferTarget || !transferReason) {
+            alert("Please select a target station and provide a reason.");
+            return;
+        }
+
+        if (!window.confirm("Are you sure you want to transfer this case? You will lose access until reassigned.")) return;
+
+        try {
+            await api.put(`/complaints/${id}/transfer`, {
+                target_station_id: transferTarget,
+                reason: transferReason
+            });
+            alert('Case Transferred Successfully');
+            navigate('/police-dashboard');
+        } catch (e) {
+            alert('Transfer failed: ' + (e.response?.data?.message || e.message));
+        }
+    };
+
+    const handleAddNote = async () => {
+        if (!noteContent.trim()) return;
+        try {
+            await api.post(`/complaints/${id}/notes`, { content: noteContent });
+            setNoteContent('');
+            loadNotes();
+        } catch (e) { alert('Failed to add note'); }
+    };
+
+    const downloadFIR = async () => {
+        try {
+            const res = await api.get(`/complaints/${id}/fir`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `FIR_CPL_${id}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+        } catch (e) { alert('Failed to download FIR'); }
+    };
+
     return (
-        <div className="min-h-screen bg-background font-sans">
+        <div className="min-h-screen bg-background font-sans relative pb-20">
+
+            {/* Transfer Modal */}
+            {isTransferring && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
+                    <div className="bg-white p-8 rounded-lg w-[500px] shadow-2xl border-t-4 border-accent">
+                        <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                            <ArrowRightLeft className="w-6 h-6 text-accent" /> Transfer Case
+                        </h2>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Target Station</label>
+                                <select
+                                    className="w-full border p-2 rounded"
+                                    value={transferTarget}
+                                    onChange={(e) => setTransferTarget(e.target.value)}
+                                >
+                                    <option value="">Select Station...</option>
+                                    {stations.filter(s => s.station_id !== complaint.station_id).map(s => (
+                                        <option key={s.station_id} value={s.station_id}>{s.station_name} ({s.location})</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Reason for Transfer</label>
+                                <textarea
+                                    className="w-full border p-2 rounded h-24"
+                                    placeholder="e.g. Jurisdiction mismatch, specialist required..."
+                                    value={transferReason}
+                                    onChange={(e) => setTransferReason(e.target.value)}
+                                ></textarea>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-4 justify-end mt-8">
+                            <button
+                                onClick={() => setIsTransferring(false)}
+                                className="px-5 py-2 border border-gray-300 rounded font-bold text-gray-600 hover:bg-gray-100"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleTransfer}
+                                className="px-5 py-2 bg-accent text-white rounded font-bold hover:bg-yellow-600"
+                            >
+                                Confirm Transfer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Header Bar */}
             <header className="bg-header h-16 flex items-center justify-between px-6 text-white shadow-md">
                 <div className="flex items-center gap-4 text-sm font-medium tracking-wide">
@@ -82,7 +192,20 @@ const CaseManagement = () => {
                     <span>Location: {complaint.incident_location}</span>
                 </div>
 
-                <div className="flex gap-4">
+                <div className="flex gap-4 items-center">
+                    <button onClick={downloadFIR} className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded font-bold text-sm shadow transition-colors flex items-center gap-2 border border-white/20">
+                        <Download className="w-4 h-4" /> FIR
+                    </button>
+                    {/* Transfer Button */}
+                    {complaint.current_status !== 'CLOSED' && (
+                        <button
+                            onClick={() => setIsTransferring(true)}
+                            className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded font-bold text-sm shadow transition-colors flex items-center gap-2 border border-white/20"
+                        >
+                            <ArrowRightLeft className="w-4 h-4" /> Transfer
+                        </button>
+                    )}
+
                     {/* Status Dropdown/Button */}
                     {complaint.current_status !== 'CLOSED' && (
                         <button
@@ -108,7 +231,15 @@ const CaseManagement = () => {
                 </div>
             </header>
 
-            <main className="p-8 max-w-[1600px] mx-auto">
+            <main className="p-8 max-w-[1600px] mx-auto space-y-8">
+                {/* Visual Indicator if Transferred */}
+                {complaint.is_transferred && (
+                    <div className="bg-blue-100 border border-blue-400 text-blue-800 p-4 rounded flex items-center gap-2">
+                        <ArrowRightLeft className="w-5 h-5" />
+                        <strong>Notice:</strong> This case was transferred from another station. Please review the timeline for details.
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
 
                     {/* Column 1: Add Timeline Update */}
@@ -164,7 +295,7 @@ const CaseManagement = () => {
                             {complaint.evidence && complaint.evidence.length > 0 ? (
                                 complaint.evidence.map((ev, i) => (
                                     <div key={i} className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded border border-gray-200">
-                                        <a href={`http://localhost:5000${ev.file_url}`} target="_blank" className="font-medium text-blue-600 truncate max-w-[150px]">{ev.file_url.split('/').pop()}</a>
+                                        <a href={`http://localhost:5001${ev.file_url}`} target="_blank" className="font-medium text-blue-600 truncate max-w-[150px]">{ev.file_url.split('/').pop()}</a>
                                         <span className="text-xs bg-gray-200 px-2 py-1 rounded text-gray-600 font-bold uppercase">{ev.visibility}</span>
                                     </div>
                                 ))
@@ -230,8 +361,44 @@ const CaseManagement = () => {
 
                 </div>
 
+                {/* Internal Notes Section - Police Only */}
+                <div className="bg-yellow-50 border border-yellow-200 p-6 rounded shadow-card">
+                    <h2 className="text-lg font-bold text-yellow-800 uppercase mb-4 flex items-center gap-2">
+                        <Lock className="w-5 h-5" /> Internal Police Notes (Confidential)
+                    </h2>
+
+                    <div className="mb-6 space-y-4 max-h-60 overflow-y-auto pr-2">
+                        {notes.length === 0 && <p className="text-gray-500 italic text-sm">No internal notes yet.</p>}
+                        {notes.map(note => (
+                            <div key={note._id} className="bg-white p-3 rounded border border-yellow-100 shadow-sm">
+                                <div className="flex justify-between items-start mb-1">
+                                    <span className="font-bold text-sm text-gray-800">{note.officer_name}</span>
+                                    <span className="text-xs text-gray-400">{new Date(note.created_at).toLocaleString()}</span>
+                                </div>
+                                <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.content}</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="flex gap-2">
+                        <textarea
+                            className="flex-1 border border-yellow-300 rounded p-2 text-sm focus:border-yellow-500 focus:outline-none bg-white"
+                            placeholder="Add a confidential note for other officers..."
+                            rows="2"
+                            value={noteContent}
+                            onChange={(e) => setNoteContent(e.target.value)}
+                        ></textarea>
+                        <button
+                            onClick={handleAddNote}
+                            className="bg-yellow-600 text-white px-4 py-2 rounded font-bold hover:bg-yellow-700 transition items-center flex gap-2"
+                        >
+                            <FileText className="w-4 h-4" /> Add Note
+                        </button>
+                    </div>
+                </div>
+
                 {/* Full Description Block */}
-                <div className="mt-8 bg-white p-6 rounded shadow-card">
+                <div className="bg-white p-6 rounded shadow-card">
                     <h2 className="text-lg font-bold text-header uppercase mb-4 border-b pb-2">Full Complaint Details</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>

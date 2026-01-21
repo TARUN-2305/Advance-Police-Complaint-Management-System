@@ -53,6 +53,28 @@ const PoliceDashboard = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => navigate('/manage-team')}
+                        className="bg-white/10 hover:bg-white/20 px-3 py-1 rounded text-sm font-bold uppercase tracking-wide transition-colors"
+                    >
+                        Manage Team
+                    </button>
+                    {user?.role === 'ADMIN' && (
+                        <>
+                            <button
+                                onClick={() => navigate('/manage-stations')}
+                                className="bg-accent text-white hover:bg-yellow-600 px-3 py-1 rounded text-sm font-bold uppercase tracking-wide transition-colors"
+                            >
+                                + Station
+                            </button>
+                            <button
+                                onClick={() => navigate('/analytics')}
+                                className="bg-blue-600 text-white hover:bg-blue-500 px-3 py-1 rounded text-sm font-bold uppercase tracking-wide transition-colors"
+                            >
+                                Analytics
+                            </button>
+                        </>
+                    )}
                     <span className="bg-white/10 px-3 py-1 rounded text-sm font-mono tracking-widest">{user?.badge_number}</span>
                     <button onClick={logout} title="Sign Out">
                         <LogOut className="w-5 h-5 text-red-400 hover:text-red-300" />

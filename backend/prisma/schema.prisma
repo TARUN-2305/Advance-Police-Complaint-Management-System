@@ -12,6 +12,11 @@ model PoliceStation {
   station_name        String
   location            String
   contact_number      String?
+  // New Fields for Station Management
+  jurisdiction_areas  String?         // Keywords like "Kengeri, Mysore Road"
+  latitude            Float?
+  longitude           Float?
+  
   in_charge_officer_id Int?
   officers            PoliceOfficer[]
   complaints          Complaint[]
@@ -35,6 +40,15 @@ model PoliceOfficer {
   email                  String            @unique
   password_hash          String
   rank                   String?
+  
+  // New Fields for Governance
+  is_active              Boolean           @default(true)
+  role                   String            @default("OFFICER") // OFFICER, ADMIN
+  
+  // Security
+  two_factor_secret      String?
+  is_2fa_enabled         Boolean           @default(false)
+
   station_id             Int
   station                PoliceStation     @relation(fields: [station_id], references: [station_id])
   assigned_complaints    Complaint[]       @relation("AssignedOfficer")
@@ -56,6 +70,9 @@ model Complaint {
   current_status      String            @default("PENDING")
   visibility          String            @default("PRIVATE") // PRIVATE, VICTIM, PUBLIC
   created_at          DateTime          @default(now())
+  
+  // New fields
+  is_transferred      Boolean           @default(false)
 
   victim              Victim            @relation(fields: [victim_id], references: [victim_id])
   station             PoliceStation?    @relation(fields: [station_id], references: [station_id])
@@ -63,6 +80,7 @@ model Complaint {
   
   status_history      ComplaintStatus[]
   summons             Summon[]
+  feedback            Feedback?
 }
 
 model ComplaintStatus {
@@ -89,4 +107,14 @@ model Summon {
 
   complaint            Complaint     @relation(fields: [complaint_id], references: [complaint_id])
   officer              PoliceOfficer @relation(fields: [issued_by_officer_id], references: [officer_id])
+}
+
+model Feedback {
+  feedback_id   Int       @id @default(autoincrement())
+  complaint_id  Int       @unique
+  rating        Int
+  comment       String?   @db.Text
+  submitted_at  DateTime  @default(now())
+
+  complaint     Complaint @relation(fields: [complaint_id], references: [complaint_id])
 }

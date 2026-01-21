@@ -45,10 +45,30 @@ async function main() {
                     email: o.email,
                     password_hash: password,
                     rank: 'Inspector',
+                    role: 'OFFICER',
+                    is_active: true,
                     station_id: o.stationId
                 }
             });
         }
+    }
+
+    // 3. Create Commissioner (Admin)
+    const adminBadge = 'COP-ADMIN-001';
+    if (!await prisma.policeOfficer.findUnique({ where: { badge_number: adminBadge } })) {
+        await prisma.policeOfficer.create({
+            data: {
+                full_name: 'Commissioner Vikram',
+                badge_number: adminBadge,
+                email: 'admin@police.gov.in',
+                password_hash: password,
+                rank: 'Commissioner',
+                role: 'ADMIN',
+                is_active: true,
+                station_id: stations[0].station_id // HQ logic ideally, but reusing Kengeri for now
+            }
+        });
+        console.log('✅ Commissioner Admin created');
     }
     console.log('✅ Officers created for all stations');
 }

@@ -9,6 +9,10 @@ import PublicSearch from './pages/PublicSearch';
 import TimelinePage from './pages/TimelinePage';
 import CaseManagement from './pages/CaseManagement';
 import LodgeComplaint from './pages/LodgeComplaint';
+import ManageTeam from './pages/ManageTeam';
+import ManageStations from './pages/ManageStations';
+import AnonymousTip from './pages/AnonymousTip';
+import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -66,6 +70,31 @@ function App() {
                                 </ProtectedRoute>
                             }
                         />
+                        <Route
+                            path="/manage-team"
+                            element={
+                                <ProtectedRoute role="OFFICER">
+                                    <ManageTeam />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/manage-stations"
+                            element={
+                                <ProtectedRoute role="OFFICER">
+                                    <ManageStations />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/analytics"
+                            element={
+                                <ProtectedRoute role="OFFICER">
+                                    <AnalyticsDashboard />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route path="/tips" element={<AnonymousTip />} />
                     </Routes>
                 </div>
             </Router>

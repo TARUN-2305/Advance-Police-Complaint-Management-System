@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { User, Shield } from 'lucide-react';
+import { User, Shield, EyeOff } from 'lucide-react';
 
 // Mockup: Home page.png
 const RoleSelection = () => {
@@ -46,6 +46,11 @@ const RoleSelection = () => {
                     </button>
                 </div>
             </div>
+
+            <button onClick={() => navigate('/tips')} className="mt-12 text-gray-400 flex items-center gap-2 hover:text-white transition opacity-70 hover:opacity-100 z-10">
+                <EyeOff className="w-5 h-5" />
+                <span className="uppercase tracking-widest text-sm font-bold">Submit Anonymous Intelligence</span>
+            </button>
         </div>
     );
 };

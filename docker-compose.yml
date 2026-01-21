@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # Database 1: PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: police_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: police_db_prod
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - police-net
+
+  # Database 2: MongoDB
+  mongo:
+    image: mongo:6.0
+    container_name: police_mongo
+    command: --quiet
+    volumes:
+      - mongodata:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - police-net
+
+  # Backend API
+  backend:
+    build: ./backend
+    container_name: police_backend
+    depends_on:
+      - postgres
+      - mongo
+    environment:
+      PORT: 5001
+      DATABASE_URL: postgresql://postgres:password123@postgres:5432/police_db_prod?schema=public
+      MONGO_URI: mongodb://mongo:27017/police_db_prod
+      JWT_SECRET: production_secret_key_change_me
+      SMTP_HOST: smtp.ethereal.email
+    ports:
+      - "5001:5001"
+    networks:
+      - police-net
+
+  # Frontend (Nginx)
+  frontend:
+    build: ./frontend
+    container_name: police_frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+    networks:
+      - police-net
+
+networks:
+  police-net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  mongodata:

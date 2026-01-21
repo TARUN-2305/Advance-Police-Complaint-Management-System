@@ -51,7 +51,7 @@ if %ERRORLEVEL% NEQ 0 (
 echo.
 echo [4/4] Starting Services...
 cd ../backend
-start "Backend API (Port 5000)" npm start
+start "Backend API (Port 5001)" npm start
 
 cd ../frontend
 start "Frontend App (Port 5173)" npm run dev
@@ -60,7 +60,7 @@ echo.
 echo ==========================================
 echo    SYSTEM IS STARTING...
 echo    Frontend: http://localhost:5173
-echo    Backend:  http://localhost:5000
+echo    Backend:  http://localhost:5001
 echo ==========================================
 echo If the windows close immediately, there was a runtime error.
 pause

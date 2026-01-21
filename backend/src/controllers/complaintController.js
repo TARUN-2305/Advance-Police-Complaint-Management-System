@@ -1,6 +1,9 @@
 const { PrismaClient } = require('@prisma/client');
 const CaseUpdate = require('../models/CaseUpdate');
 const EvidenceRecord = require('../models/EvidenceRecord');
+const InternalNote = require('../models/InternalNote');
+const PDFDocument = require('pdfkit');
+const sendEmail = require('../utils/emailService');
 
 const prisma = new PrismaClient();
 
@@ -38,6 +41,25 @@ exports.lodgeComplaint = async (req, res) => {
         // Initialize Mongo Case Update doc
         await new CaseUpdate({ complaint_id: complaint.complaint_id, updates: [] }).save();
 
+        // Notifications
+        const io = req.app.get('io');
+        // Notify Officers
+        io.emit('new_complaint', {
+            id: complaint.complaint_id,
+            station_id: assignedStationId,
+            message: `New Complaint at ${complaint.station?.station_name || 'Station ' + assignedStationId}`
+        });
+
+        // Notify Victim via Email
+        const victim = await prisma.victim.findUnique({ where: { victim_id: req.user.id } });
+        if (victim) {
+            await sendEmail(
+                victim.email,
+                `Complaint #CPL-${complaint.complaint_id} Lodged`,
+                `Hello ${victim.full_name},\n\nYour complaint has been successfully lodged.\nAssigned Station: ${complaint.station?.station_name}\n\nTrack status online.`
+            );
+        }
+
         res.status(201).json(complaint);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -60,10 +82,15 @@ exports.getMyComplaints = async (req, res) => {
 // Get All Complaints (Officer - for their station)
 // Simplified: Officer sees all complaints assigned to them or their station
 exports.getAllComplaints = async (req, res) => {
-    if (req.user.role !== 'OFFICER') return res.status(403).json({ message: 'Access denied' });
+    if (req.user.role !== 'OFFICER' && req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Access denied' });
     try {
-        // Fetch officer's station
         const officer = await prisma.policeOfficer.findUnique({ where: { officer_id: req.user.id } });
+
+        // If Admin, show ALL complaints? Or still restricted? 
+        // For now, if role is ADMIN, maybe show all?
+        // Let's keep it station-based unless Admin explicitly asks for All.
+        // Assuming Admin has a 'station_id' (HQ). They see HQ cases.
+        // Let's enable View All for Admin later.
 
         const complaints = await prisma.complaint.findMany({
             where: { station_id: officer.station_id },
@@ -76,13 +103,12 @@ exports.getAllComplaints = async (req, res) => {
 };
 
 // Get Complaint Details (SQL + Mongo)
-// Get Complaint Details (SQL + Mongo)
 exports.getComplaintDetails = async (req, res) => {
     const { id } = req.params;
     try {
         const complaint = await prisma.complaint.findUnique({
             where: { complaint_id: parseInt(id) },
-            include: { victim: true, station: true, assigned_officer: true }
+            include: { victim: true, station: true, assigned_officer: true, feedback: true }
         });
 
         if (!complaint) return res.status(404).json({ message: 'Complaint not found' });
@@ -102,13 +128,6 @@ exports.getComplaintDetails = async (req, res) => {
         if (req.user.role === 'VICTIM') {
             updates = updates.filter(u => u.visibility === 'VICTIM' || u.visibility === 'PUBLIC');
             // Victim sees their own uploads and Public/Victim visible police uploads
-            // For now, assuming all evidence uploaded by anyone is visible to Victim unless strictly flagged? 
-            // Better safe: Police uploads default to PRIVATE.
-            // Let's filter evidence: Show everything for now as per user request "visible to police", 
-            // but usually police evidence is private. 
-            // User asked: "Complaint... visible to police right?" -> Yes.
-            // User asked: "Complaint visible to victim?" -> Yes.
-            // But Police internal evidence shouldn't be visible.
             evidence = evidence.filter(e => e.visibility !== 'PRIVATE' && e.visibility !== 'POLICE_ONLY');
         }
 
@@ -120,7 +139,7 @@ exports.getComplaintDetails = async (req, res) => {
 
 // Update Status (SQL)
 exports.updateStatus = async (req, res) => {
-    if (req.user.role !== 'OFFICER') return res.status(403).json({ message: 'Access denied' });
+    if (req.user.role !== 'OFFICER' && req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Access denied' });
     const { id } = req.params;
     const { status, remarks } = req.body;
 
@@ -188,14 +207,9 @@ exports.addCaseUpdate = async (req, res) => {
 };
 
 // Add Evidence (Mongo)
-// Add Evidence (Mongo)
 exports.addEvidence = async (req, res) => {
     const { id } = req.params;
     const { file_url, evidence_type, description, visibility } = req.body;
-
-    // Allow Officer OR Victim (if they own the case)
-    // For simplicity, we assume the AuthMiddleware protects the user identity.
-    // Ideally we check ownership if Victim.
 
     try {
         const evidence = new EvidenceRecord({
@@ -205,7 +219,6 @@ exports.addEvidence = async (req, res) => {
             description,
             uploaded_by_officer_id: req.user.role === 'OFFICER' ? req.user.id : null,
             visibility: visibility || (req.user.role === 'OFFICER' ? 'PRIVATE' : 'POLICE_ONLY')
-            // Victim uploads are 'POLICE_ONLY' (visible to police) by default
         });
         await evidence.save();
         res.json(evidence);
@@ -254,4 +267,173 @@ exports.uploadFile = (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
     const fileUrl = `/uploads/${req.file.filename}`;
     res.json({ fileUrl, originalName: req.file.originalname, type: req.file.mimetype });
+};
+
+// Transfer Case
+exports.transferComplaint = async (req, res) => {
+    const allowed = ['OFFICER', 'ADMIN'];
+    if (!allowed.includes(req.user.role)) return res.status(403).json({ message: 'Access denied' });
+
+    const { id } = req.params;
+    const { target_station_id, reason } = req.body;
+
+    try {
+        const targetStation = await prisma.policeStation.findUnique({ where: { station_id: parseInt(target_station_id) } });
+        if (!targetStation) return res.status(404).json({ message: 'Target station not found' });
+
+        const complaint = await prisma.complaint.update({
+            where: { complaint_id: parseInt(id) },
+            data: {
+                station_id: parseInt(target_station_id),
+                assigned_officer_id: null,
+                is_transferred: true,
+                current_status: 'PENDING'
+            }
+        });
+
+        await prisma.complaintStatus.create({
+            data: {
+                complaint_id: parseInt(id),
+                status: 'TRANSFERRED',
+                updated_by_officer_id: req.user.id,
+                remarks: `Transferred to ${targetStation.station_name}. Reason: ${reason}`
+            }
+        });
+
+        await CaseUpdate.findOneAndUpdate(
+            { complaint_id: parseInt(id) },
+            {
+                $push: {
+                    updates: {
+                        text: `Case transferred to ${targetStation.station_name}.`,
+                        author_role: 'POLICE',
+                        author_id: req.user.id,
+                        visibility: 'VICTIM'
+                    }
+                }
+            }
+        );
+
+        res.json({ message: 'Transfer successful', complaint });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// Internal Notes
+exports.addInternalNote = async (req, res) => {
+    const allowed = ['OFFICER', 'ADMIN'];
+    if (!allowed.includes(req.user.role)) return res.status(403).json({ message: 'Access denied' });
+    const { id } = req.params;
+    const { content } = req.body;
+
+    try {
+        const officer = await prisma.policeOfficer.findUnique({ where: { officer_id: req.user.id } });
+
+        const note = new InternalNote({
+            complaint_id: parseInt(id),
+            officer_id: req.user.id,
+            officer_name: officer ? officer.full_name : 'Unknown Officer',
+            content
+        });
+        await note.save();
+        res.json(note);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getInternalNotes = async (req, res) => {
+    const allowed = ['OFFICER', 'ADMIN'];
+    if (!allowed.includes(req.user.role)) return res.status(403).json({ message: 'Access denied' });
+    const { id } = req.params;
+
+    try {
+        const notes = await InternalNote.find({ complaint_id: parseInt(id) }).sort({ created_at: -1 });
+        res.json(notes);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// Submit Feedback
+exports.submitFeedback = async (req, res) => {
+    if (req.user.role !== 'VICTIM') return res.status(403).json({ message: 'Access denied' });
+    const { id } = req.params;
+    const { rating, comment } = req.body;
+
+    try {
+        const feedback = await prisma.feedback.create({
+            data: {
+                complaint_id: parseInt(id),
+                rating: parseInt(rating),
+                comment
+            }
+        });
+        res.status(201).json(feedback);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+};
+
+// Generate FIR PDF
+exports.generateFIR = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const complaint = await prisma.complaint.findUnique({
+            where: { complaint_id: parseInt(id) },
+            include: { victim: true, station: true }
+        });
+
+        if (!complaint) return res.status(404).json({ message: 'Complaint not found' });
+
+        // Auth Check
+        const allowed = ['OFFICER', 'ADMIN', 'VICTIM'];
+        if (!allowed.includes(req.user.role)) return res.status(403).json({ message: 'Access denied' });
+        if (req.user.role === 'VICTIM' && complaint.victim_id !== req.user.id) return res.status(403).json({ message: 'Access denied' });
+
+        const doc = new PDFDocument();
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=FIR_CPL_${complaint.complaint_id}.pdf`);
+
+        doc.pipe(res);
+
+        // Header
+        doc.fontSize(20).text('FIRST INFORMATION REPORT', { align: 'center', underline: true });
+        doc.moveDown();
+        doc.fontSize(12).text('POLICE DEPARTMENT', { align: 'center' });
+        doc.moveDown();
+        doc.moveTo(50, 100).lineTo(550, 100).stroke();
+        doc.moveDown();
+
+        // Details
+        doc.fontSize(12).font('Helvetica-Bold').text(`FIR Number: CPL-${complaint.complaint_id}`);
+        doc.font('Helvetica').text(`Date & Time: ${new Date(complaint.created_at).toLocaleString()}`);
+        doc.text(`Police Station: ${complaint.station ? complaint.station.station_name : 'Pending Assignment'}`);
+        doc.moveDown();
+
+        doc.font('Helvetica-Bold').text('Complainant Details:');
+        doc.font('Helvetica').text(`Name: ${complaint.victim?.full_name}`);
+        doc.text(`Contact: ${complaint.victim?.phone_number || 'N/A'}`);
+        doc.moveDown();
+
+        doc.font('Helvetica-Bold').text('Incident Details:');
+        doc.font('Helvetica').text(`Category: ${complaint.category}`);
+        doc.text(`Location: ${complaint.incident_location}`);
+        doc.moveDown();
+
+        doc.font('Helvetica-Bold').text('Description:');
+        doc.font('Helvetica').text(complaint.description, { align: 'justify' });
+        doc.moveDown();
+
+        doc.moveDown();
+        doc.font('Helvetica-Bold').text(`Current Status: ${complaint.current_status}`);
+
+        doc.moveDown(4);
+        doc.fontSize(10).text('This is a digitally generated report.', { align: 'center', color: 'grey' });
+
+        doc.end();
+
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 };
