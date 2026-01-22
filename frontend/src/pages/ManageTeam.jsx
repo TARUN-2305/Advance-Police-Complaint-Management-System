@@ -202,7 +202,7 @@ const ManageTeam = () => {
                                         <div className="font-bold text-gray-800">{off.full_name} ({off.rank})</div>
                                         <div className="text-xs text-gray-500">
                                             Badge: {off.badge_number} | Station: {off.station?.station_name || 'Unassigned'} |
-                                            <span className="font-bold text-blue-600"> Cases: {off._count?.complaints || 0}</span>
+                                            <span className="font-bold text-blue-600"> Cases: {off._count?.assigned_complaints || 0}</span>
                                         </div>
                                         <div className="text-xs font-mono text-gray-400">{off.email}</div>
                                     </div>

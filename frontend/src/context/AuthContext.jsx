@@ -15,9 +15,9 @@ export const AuthProvider = ({ children }) => {
         }
     }, [token]);
 
-    const login = async (email, password, role) => {
+    const login = async (email, password, role, totp) => {
         try {
-            const res = await api.post('/auth/login', { email, password, role });
+            const res = await api.post('/auth/login', { email, password, role, totp });
             const { token, user, role: userRole } = res.data;
 
             setToken(token);

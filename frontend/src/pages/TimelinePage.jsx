@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
-import { ChevronLeft, CheckCircle, Clock, MapPin, Shield, Star, Download } from 'lucide-react';
+import { ChevronLeft, CheckCircle, Clock, MapPin, Shield, Star, Download, Upload, Loader } from 'lucide-react';
 
 const TimelinePage = () => {
     const { id } = useParams();
@@ -13,6 +13,10 @@ const TimelinePage = () => {
     const [comment, setComment] = useState('');
     const [feedbackSent, setFeedbackSent] = useState(false);
 
+    // Upload State
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef(null);
+
     useEffect(() => {
         loadComplaint();
     }, [id]);
@@ -20,6 +24,35 @@ const TimelinePage = () => {
     const loadComplaint = () => {
         api.get(`/complaints/${id}`).then(res => setComplaint(res.data)).catch(console.error);
     }
+
+    const handleFileUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setUploading(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const uploadRes = await api.post('/complaints/upload', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            await api.post(`/complaints/${id}/evidence`, {
+                file_url: uploadRes.data.fileUrl,
+                evidence_type: 'DOCUMENT',
+                description: 'Submitted by Complainant',
+                visibility: 'POLICE_ONLY'
+            });
+
+            alert('Evidence Submitted. It will be reviewed by the officer.');
+            loadComplaint();
+        } catch (error) {
+            alert('Upload Failed');
+        } finally {
+            setUploading(false);
+        }
+    };
 
     if (!complaint) return <div className="p-10 text-center">Loading...</div>;
 
@@ -82,6 +115,34 @@ const TimelinePage = () => {
                             'bg-blue-100 text-blue-700 border border-blue-200'
                         }`}>
                         {complaint.current_status}
+                    </div>
+                </div>
+
+                {/* Evidence Upload */}
+                <div className="bg-blue-50/50 p-6 rounded-lg border border-blue-100 mb-8 flex flex-col md:flex-row items-center gap-6">
+                    <div className="flex-1">
+                        <h3 className="font-bold text-blue-900 mb-1 flex items-center gap-2">
+                            <Upload className="w-4 h-4" /> Submit Additional Evidence
+                        </h3>
+                        <p className="text-sm text-blue-800/70">
+                            Have photos or documents? Upload them securely for the officer to review.
+                        </p>
+                    </div>
+                    <div>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileUpload}
+                            className="hidden"
+                        />
+                        <button
+                            onClick={() => fileInputRef.current.click()}
+                            disabled={uploading}
+                            className="bg-white text-blue-600 border border-blue-200 px-4 py-2 rounded-md font-bold text-sm shadow-sm hover:bg-blue-50 transition flex items-center gap-2"
+                        >
+                            {uploading ? <Loader className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                            {uploading ? 'Uploading...' : 'Upload File'}
+                        </button>
                     </div>
                 </div>
 

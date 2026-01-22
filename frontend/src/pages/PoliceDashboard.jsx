@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import AuthContext from '../context/AuthContext';
 import api from '../api/axios';
 import {
-    FileText, Search, Gavel, Menu, LogOut, MapPin, Calendar, LayoutDashboard
+    FileText, Search, Gavel, Menu, LogOut, MapPin, Calendar, LayoutDashboard, Lock
 } from 'lucide-react';
 
 // Mockup: Police page.png
@@ -41,8 +41,50 @@ const PoliceDashboard = () => {
         } catch (e) { alert('Failed to accept case'); }
     };
 
+    // 2FA State
+    const [show2FA, setShow2FA] = useState(false);
+    const [qrData, setQrData] = useState(null);
+    const [otp, setOtp] = useState('');
+
+    const start2FA = async () => {
+        try {
+            const res = await api.post('/auth/2fa/setup');
+            setQrData(res.data.qr_code);
+            setShow2FA(true);
+        } catch (e) { alert('Failed to start 2FA Setup. You might not have permission.'); }
+    };
+
+    const confirm2FA = async () => {
+        try {
+            await api.post('/auth/2fa/verify', { token: otp });
+            alert('2FA Enabled! Use Google Authenticator next time.');
+            setShow2FA(false);
+        } catch (e) { alert('Invalid Code. Try again.'); }
+    };
+
     return (
-        <div className="min-h-screen bg-[#E5E4D6]/30 font-sans">
+        <div className="min-h-screen bg-[#E5E4D6]/30 font-sans relative">
+            {/* 2FA Modal */}
+            {show2FA && (
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center animate-fade-in">
+                    <div className="bg-white p-8 rounded shadow-2xl max-w-sm w-full text-center border-4 border-header">
+                        <h2 className="text-xl font-bold mb-2 text-header">Secure Your Account</h2>
+                        <p className="text-xs text-gray-500 mb-4">Scan with Google Authenticator</p>
+                        <div className="bg-white p-2 border inline-block mb-4">
+                            <img src={qrData} alt="QR" className="w-48 h-48" />
+                        </div>
+                        <input
+                            type="text" placeholder="000 000"
+                            value={otp} onChange={e => setOtp(e.target.value)}
+                            className="w-full text-center text-3xl tracking-[0.5em] border-2 border-gray-300 rounded p-2 mb-6 font-mono focus:border-header outline-none"
+                            maxLength={6}
+                        />
+                        <button onClick={confirm2FA} className="w-full bg-header text-white font-bold py-3 rounded hover:bg-black transition mb-3">VERIFY & ENABLE</button>
+                        <button onClick={() => setShow2FA(false)} className="text-gray-500 text-sm hover:underline">Cancel</button>
+                    </div>
+                </div>
+            )}
+
             {/* Header: Officer Dashboard */}
             <header className="bg-header h-16 flex items-center justify-between px-6 text-white shadow-md">
                 <div className="flex items-center gap-4">
@@ -53,6 +95,12 @@ const PoliceDashboard = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
+                    <button
+                        onClick={start2FA}
+                        className="bg-green-600 hover:bg-green-500 px-3 py-1 rounded text-sm font-bold uppercase tracking-wide transition-colors flex items-center gap-1"
+                    >
+                        <Lock className="w-4 h-4" /> Security
+                    </button>
                     <button
                         onClick={() => navigate('/manage-team')}
                         className="bg-white/10 hover:bg-white/20 px-3 py-1 rounded text-sm font-bold uppercase tracking-wide transition-colors"

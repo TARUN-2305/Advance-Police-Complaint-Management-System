@@ -66,14 +66,13 @@ exports.login = async (req, res) => {
         }
 
         if (!user) {
-            // Log Failed Attempt
-            logAudit({ ip: req.ip }, 'LOGIN_FAILED', '/auth/login', { email, role, reason: 'User not found' });
+            logAudit(req, 'LOGIN_FAILED', '/auth/login', { email, role, reason: 'User not found' });
             return res.status(404).json({ message: 'User not found' });
         }
 
         const isMatch = await bcrypt.compare(password, user.password_hash);
         if (!isMatch) {
-            logAudit({ ip: req.ip }, 'LOGIN_FAILED', '/auth/login', { email, role, reason: 'Bad password' });
+            logAudit(req, 'LOGIN_FAILED', '/auth/login', { email, role, reason: 'Bad password' });
             return res.status(400).json({ message: 'Invalid credentials' });
         }
 
@@ -87,7 +86,7 @@ exports.login = async (req, res) => {
                 token: totp
             });
             if (!verified) {
-                logAudit({ ip: req.ip }, 'LOGIN_FAILED_2FA', '/auth/login', { email, role });
+                logAudit(req, 'LOGIN_FAILED_2FA', '/auth/login', { email, role });
                 return res.status(400).json({ message: 'Invalid 2FA Code' });
             }
         }
@@ -95,8 +94,9 @@ exports.login = async (req, res) => {
         const id = role === 'VICTIM' ? user.victim_id : user.officer_id;
         const tokenRole = role === 'OFFICER' ? user.role : 'VICTIM';
 
-        // Log Success
-        logAudit({ user: { id, role: tokenRole }, ip: req.ip }, 'LOGIN_SUCCESS', '/auth/login');
+        // Log Success (Attach user to req for logger)
+        req.user = { id, role: tokenRole };
+        logAudit(req, 'LOGIN_SUCCESS', '/auth/login');
 
         res.json({ token: generateToken(id, tokenRole), user, role });
     } catch (error) {
@@ -111,7 +111,7 @@ exports.getAllOfficers = async (req, res) => {
             include: {
                 station: true,
                 _count: {
-                    select: { complaints: { where: { current_status: 'PENDING' } } }
+                    select: { assigned_complaints: true }
                 }
             }
         });

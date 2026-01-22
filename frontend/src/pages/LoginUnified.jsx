@@ -11,15 +11,24 @@ const LoginPage = ({ role }) => {
     const navigate = useNavigate();
     const [error, setError] = useState('');
 
+    const [req2FA, setReq2FA] = useState(false);
+    const [otp, setOtp] = useState('');
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         const apiRole = isOfficer ? 'OFFICER' : 'VICTIM';
-        const res = await login(email, password, apiRole);
+        const res = await login(email, password, apiRole, req2FA ? otp : undefined);
+
         if (res.success) {
             navigate(isOfficer ? '/police-dashboard' : '/victim-dashboard');
         } else {
-            setError(res.message);
+            if (res.message === '2FA_REQUIRED') {
+                setReq2FA(true);
+                setError('');
+            } else {
+                setError(res.message);
+            }
         }
     };
 
@@ -33,7 +42,7 @@ const LoginPage = ({ role }) => {
                     {isOfficer ? 'Officer Portal' : 'Citizen Portal'}
                 </h2>
                 <p className="mt-2 text-center text-sm text-gray-600">
-                    Sign in to access the system
+                    {req2FA ? 'Enter your 2FA Security Code' : 'Sign in to access the system'}
                 </p>
             </div>
 
@@ -42,48 +51,73 @@ const LoginPage = ({ role }) => {
                     <form className="space-y-6" onSubmit={handleSubmit}>
                         {error && <div className="bg-red-50 text-red-700 p-3 rounded text-sm text-center">{error}</div>}
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">
-                                {isOfficer ? 'Badge ID / Email' : 'Email Address'}
-                            </label>
-                            <div className="mt-1 relative rounded-md shadow-sm">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <User className="h-5 w-5 text-gray-400" />
+                        {!req2FA ? (
+                            <>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">
+                                        {isOfficer ? 'Badge ID / Email' : 'Email Address'}
+                                    </label>
+                                    <div className="mt-1 relative rounded-md shadow-sm">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <User className="h-5 w-5 text-gray-400" />
+                                        </div>
+                                        <input
+                                            type={isOfficer ? "text" : "email"}
+                                            required
+                                            className="focus:ring-police-blue focus:border-police-blue block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2"
+                                            placeholder={isOfficer ? "Enter Badge ID or Email" : "Enter your email"}
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                        />
+                                    </div>
                                 </div>
-                                <input
-                                    type={isOfficer ? "text" : "email"}
-                                    required
-                                    className="focus:ring-police-blue focus:border-police-blue block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2"
-                                    placeholder={isOfficer ? "Enter Badge ID or Email" : "Enter your email"}
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                />
-                            </div>
-                        </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Password</label>
-                            <div className="mt-1 relative rounded-md shadow-sm">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <Lock className="h-5 w-5 text-gray-400" />
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Password</label>
+                                    <div className="mt-1 relative rounded-md shadow-sm">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Lock className="h-5 w-5 text-gray-400" />
+                                        </div>
+                                        <input
+                                            type="password"
+                                            required
+                                            className="focus:ring-police-blue focus:border-police-blue block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2"
+                                            placeholder="••••••••"
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                        />
+                                    </div>
                                 </div>
-                                <input
-                                    type="password"
-                                    required
-                                    className="focus:ring-police-blue focus:border-police-blue block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2"
-                                    placeholder="••••••••"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                />
+                            </>
+                        ) : (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Authenticator Code (6-Digit)</label>
+                                <div className="mt-1 relative rounded-md shadow-sm">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <Lock className="h-5 w-5 text-gray-400" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        required
+                                        maxLength={6}
+                                        className="focus:ring-police-blue focus:border-police-blue block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 tracking-widest font-mono text-center text-lg"
+                                        placeholder="000 000"
+                                        value={otp}
+                                        onChange={(e) => setOtp(e.target.value)}
+                                        autoFocus
+                                    />
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         <div className="flex items-center justify-between">
-                            <div className="text-sm">
-                                <a href="#" className="font-medium text-police-blue hover:text-police-navy">
-                                    Forgot password?
-                                </a>
-                            </div>
+                            {!req2FA && (
+                                <div className="text-sm">
+                                    <a href="#" className="font-medium text-police-blue hover:text-police-navy">
+                                        Forgot password?
+                                    </a>
+                                </div>
+                            )}
                         </div>
 
                         <div>
@@ -91,7 +125,7 @@ const LoginPage = ({ role }) => {
                                 type="submit"
                                 className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${isOfficer ? 'bg-police-navy hover:bg-black' : 'bg-police-blue hover:bg-blue-800'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-police-blue transition-colors`}
                             >
-                                Sign in
+                                {req2FA ? 'Verify 2FA Code' : 'Sign in'}
                             </button>
                         </div>
                     </form>
