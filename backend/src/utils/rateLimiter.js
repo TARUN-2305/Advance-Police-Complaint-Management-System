@@ -10,7 +10,7 @@ exports.publicLimiter = rateLimit({
 
 exports.loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 10, // 10 login attempts per 15 min
+    max: 100, // 10 login attempts per 15 min
     message: { message: "Too many login attempts. Account temporarily locked." },
     standardHeaders: true,
     legacyHeaders: false,
