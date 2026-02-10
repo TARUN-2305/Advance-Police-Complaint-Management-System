@@ -21,6 +21,17 @@ echo [2/4] Setting up Database...
 echo Ensure PostgreSQL and MongoDB are running.
 echo If this fails, check 'backend/.env' credentials.
 echo.
+echo [2.5/4] Setting up AI Database (SQLite)...
+call npx prisma generate --schema=./prisma/ai.schema.prisma
+echo Pushing AI schema...
+call npx prisma db push --schema=./prisma/ai.schema.prisma
+if %ERRORLEVEL% NEQ 0 (
+    echo Error setting up AI Database.
+    pause
+    exit /b %ERRORLEVEL%
+)
+
+echo.
 call npx prisma generate
 echo Pushing schema to DB...
 call npx prisma db push --accept-data-loss

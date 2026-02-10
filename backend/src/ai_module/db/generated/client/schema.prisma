@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/ai_module/db/generated/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./ai.db"
+}
+
+model AIAnalysisLog {
+  id         Int      @id @default(autoincrement())
+  model_name String
+  model_ver  String
+  created_at DateTime @default(now())
+}
+
+model ComplaintAnalysis {
+  id           Int @id @default(autoincrement())
+  complaint_id Int @unique // Foreign Key to main DB (logical)
+
+  // Predictions
+  severity_score     Int // 0-100
+  urgency_level      String // LOW, MEDIUM, HIGH
+  predicted_category String
+
+  // Explainability
+  confidence_score   Float
+  extracted_entities String // JSON string of entities (Person, Location, Date)
+  explanation        String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+model VoiceComplaintLog {
+  id             Int      @id @default(autoincrement())
+  audio_path     String
+  transcript     String
+  extracted_json String // JSON string
+  confidence     Float?
+  created_at     DateTime @default(now())
+
+  // Optional link if submission successful
+  final_complaint_id Int?
+}

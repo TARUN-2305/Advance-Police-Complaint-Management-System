@@ -4,24 +4,41 @@ const EvidenceRecord = require('../models/EvidenceRecord');
 const InternalNote = require('../models/InternalNote');
 const PDFDocument = require('pdfkit');
 const sendEmail = require('../utils/emailService');
+const AIService = require('../ai_module'); // Import AI Service
 
 const prisma = new PrismaClient();
 
 // Lodge Complaint
 exports.lodgeComplaint = async (req, res) => {
-    const { title, description, incident_location, category } = req.body;
+    const { title, description, incident_location, incident_date, category } = req.body;
 
-    // Simple Auto-Assignment Logic (Mock GIS)
-    let assignedStationId = 1; // Default
+    // Smart Assignment Logic
+    let assignedStationId = 1; // Default to Central Station/Commissioner
 
-    // Fetch all stations to find a match
+    // Fetch all stations
     const stations = await prisma.policeStation.findMany();
     const locationLower = incident_location.toLowerCase();
 
-    const matchedStation = stations.find(s => locationLower.includes(s.location.toLowerCase()));
+    // 1. Direct Location Match (e.g. "Indiranagar" matches "Indiranagar PS")
+    let matchedStation = stations.find(s =>
+        s.station_name.toLowerCase().includes(locationLower) ||
+        s.location.toLowerCase().includes(locationLower)
+    );
+
+    // 2. Jurisdiction Match (if no direct match)
+    if (!matchedStation) {
+        matchedStation = stations.find(s => {
+            if (!s.jurisdiction_areas) return false;
+            const areas = s.jurisdiction_areas.toLowerCase().split(',').map(a => a.trim());
+            return areas.some(area => locationLower.includes(area));
+        });
+    }
 
     if (matchedStation) {
         assignedStationId = matchedStation.station_id;
+        console.log(`📍 Rutode complaint to ${matchedStation.station_name} based on location: ${incident_location}`);
+    } else {
+        console.log(`⚠️ No specific station found for: ${incident_location}. Defaulting to Station ID 1.`);
     }
 
     try {
@@ -31,6 +48,7 @@ exports.lodgeComplaint = async (req, res) => {
                 title,
                 description,
                 incident_location,
+                incident_date: incident_date ? new Date(incident_date) : undefined,
                 category,
                 station_id: assignedStationId,
                 current_status: 'PENDING'
@@ -60,6 +78,14 @@ exports.lodgeComplaint = async (req, res) => {
             );
         }
 
+        // --- AI MODULE INTEGRATION (Async Hook) ---
+        // Fire and forget - do not await
+        setImmediate(() => {
+            AIService.triggerAnalysis(complaint.complaint_id, description + " " + title)
+                .catch(err => console.error("AI Trigger Error:", err));
+        });
+        // ------------------------------------------
+
         res.status(201).json(complaint);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -81,20 +107,20 @@ exports.getMyComplaints = async (req, res) => {
 
 // Get All Complaints (Officer - for their station)
 // Simplified: Officer sees all complaints assigned to them or their station
+// Get All Complaints (Officer - assignments + shared)
 exports.getAllComplaints = async (req, res) => {
     if (req.user.role !== 'OFFICER' && req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Access denied' });
     try {
         const officer = await prisma.policeOfficer.findUnique({ where: { officer_id: req.user.id } });
 
-        // If Admin, show ALL complaints? Or still restricted? 
-        // For now, if role is ADMIN, maybe show all?
-        // Let's keep it station-based unless Admin explicitly asks for All.
-        // Assuming Admin has a 'station_id' (HQ). They see HQ cases.
-        // Let's enable View All for Admin later.
-
         const complaints = await prisma.complaint.findMany({
-            where: { station_id: officer.station_id },
-            include: { victim: true }
+            where: {
+                OR: [
+                    { station_id: officer.station_id }, // My Station's cases
+                    { shared_with: { some: { officer_id: req.user.id } } } // Cases shared with me
+                ]
+            },
+            include: { victim: true, shared_with: true }
         });
         res.json(complaints);
     } catch (error) {
@@ -108,7 +134,7 @@ exports.getComplaintDetails = async (req, res) => {
     try {
         const complaint = await prisma.complaint.findUnique({
             where: { complaint_id: parseInt(id) },
-            include: { victim: true, station: true, assigned_officer: true, feedback: true }
+            include: { victim: true, station: true, assigned_officer: true, feedback: true, shared_with: true }
         });
 
         if (!complaint) return res.status(404).json({ message: 'Complaint not found' });
@@ -116,6 +142,35 @@ exports.getComplaintDetails = async (req, res) => {
         // Authorization Check
         if (req.user.role === 'VICTIM' && complaint.victim_id !== req.user.id) {
             return res.status(403).json({ message: 'Access denied' });
+        }
+
+        // Police Access Check (Station or Shared)
+        if (req.user.role === 'OFFICER') {
+            // Check if officer is in shared_with list or same station
+            const isShared = complaint.shared_with.some(o => o.officer_id === req.user.id);
+            const isSameStation = complaint.station_id === req.user.station_id; // Need to fetch user station first if not in token
+
+            // Simplification: If they can fetch it via getAllComplaints, they can see it.
+            // But for now, we rely on the implicit station check. 
+            // We need to fetch the officer's station_id effectively or rely on the frontend behaving.
+            // Ideally we check DB against req.user.id.
+
+            // For safety, let's trust if they are hitting this endpoint they might have access, 
+            // but strictly we should check.
+            // Since we fetched `complaint` with `station` and `shared_with`...
+
+            // Check logic:
+            // 1. Same Station
+            // 2. Assigned Officer
+            // 3. Shared With
+
+            // We need to know req.user.station_id. It's usually in the token or we fetch it.
+            // Assuming it's NOT in token for now, let's fetch officer details or assume frontend is right?
+            // NO, security first. Fetch officer station.
+            const officer = await prisma.policeOfficer.findUnique({ where: { officer_id: req.user.id } });
+            if (complaint.station_id !== officer.station_id && !isShared) {
+                return res.status(403).json({ message: 'Access denied to this case' });
+            }
         }
 
         // Fetch Mongo Data
@@ -217,8 +272,9 @@ exports.addEvidence = async (req, res) => {
             evidence_type,
             file_url,
             description,
-            uploaded_by_officer_id: req.user.role === 'OFFICER' ? req.user.id : null,
-            visibility: visibility || (req.user.role === 'OFFICER' ? 'PRIVATE' : 'POLICE_ONLY')
+            uploaded_by_officer_id: req.user.role === 'OFFICER' ? req.user.id : undefined,
+            uploaded_by_victim_id: req.user.role === 'VICTIM' ? req.user.id : undefined,
+            visibility: visibility || (req.user.role === 'OFFICER' ? 'PRIVATE' : 'VICTIM')
         });
         await evidence.save();
         res.json(evidence);
@@ -270,7 +326,9 @@ exports.uploadFile = (req, res) => {
 };
 
 // Transfer Case
+// Transfer Complaint
 exports.transferComplaint = async (req, res) => {
+    // ... existing transfer logic ...
     const allowed = ['OFFICER', 'ADMIN'];
     if (!allowed.includes(req.user.role)) return res.status(403).json({ message: 'Access denied' });
 
@@ -320,7 +378,41 @@ exports.transferComplaint = async (req, res) => {
     }
 };
 
-// Internal Notes
+// Share Complaint (Collaboration)
+exports.shareComplaint = async (req, res) => {
+    if (req.user.role !== 'OFFICER' && req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Access denied' });
+    const { id } = req.params;
+    const { officer_id } = req.body;
+
+    try {
+        const complaint = await prisma.complaint.update({
+            where: { complaint_id: parseInt(id) },
+            data: {
+                shared_with: {
+                    connect: { officer_id: parseInt(officer_id) }
+                }
+            },
+            include: { shared_with: true }
+        });
+
+        res.json({ message: 'Case shared successfully', shared_with: complaint.shared_with });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// Get All Officers (for sharing selection)
+exports.getAllOfficers = async (req, res) => {
+    if (req.user.role !== 'OFFICER' && req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Access denied' });
+    try {
+        const officers = await prisma.policeOfficer.findMany({
+            select: { officer_id: true, full_name: true, rank: true, badge_number: true, station: { select: { station_name: true } } }
+        });
+        res.json(officers);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
 exports.addInternalNote = async (req, res) => {
     const allowed = ['OFFICER', 'ADMIN'];
     if (!allowed.includes(req.user.role)) return res.status(403).json({ message: 'Access denied' });
