@@ -12,8 +12,7 @@ model PoliceStation {
   station_name        String
   location            String
   contact_number      String?
-  // New Fields for Station Management
-  jurisdiction_areas  String?         // Keywords like "Kengeri, Mysore Road"
+  jurisdiction_areas  String?         // Comma-separated areas e.g. "Indiranagar, Domlur"
   latitude            Float?
   longitude           Float?
   
@@ -52,6 +51,7 @@ model PoliceOfficer {
   station_id             Int
   station                PoliceStation     @relation(fields: [station_id], references: [station_id])
   assigned_complaints    Complaint[]       @relation("AssignedOfficer")
+  shared_complaints      Complaint[]       @relation("SharedComplaints")
   status_updates         ComplaintStatus[]
   summons_issued         Summon[]
 }
@@ -77,6 +77,7 @@ model Complaint {
   victim              Victim            @relation(fields: [victim_id], references: [victim_id])
   station             PoliceStation?    @relation(fields: [station_id], references: [station_id])
   assigned_officer    PoliceOfficer?    @relation("AssignedOfficer", fields: [assigned_officer_id], references: [officer_id])
+  shared_with         PoliceOfficer[]   @relation("SharedComplaints")
   
   status_history      ComplaintStatus[]
   summons             Summon[]

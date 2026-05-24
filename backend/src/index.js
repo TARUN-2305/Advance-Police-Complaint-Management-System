@@ -10,6 +10,9 @@ const complaintRoutes = require('./routes/complaintRoutes');
 const stationRoutes = require('./routes/stationRoutes');
 const tipRoutes = require('./routes/tipRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
+const aiRoutes = require('./routes/aiRoutes'); // New AI Routes
+const voiceRoutes = require('./routes/voiceRoutes'); // New Voice Routes
+const internalNoteRoutes = require('./routes/internalNoteRoutes'); // New Internal Notes
 const helmet = require('helmet');
 const { publicLimiter, loginLimiter } = require('./utils/rateLimiter');
 
@@ -53,6 +56,9 @@ app.use('/api/complaints', complaintRoutes);
 app.use('/api/stations', stationRoutes);
 app.use('/api/tips', tipRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/ai', aiRoutes); // Register AI Routes
+app.use('/api/voice', voiceRoutes);
+app.use('/api/notes', internalNoteRoutes); // Register Voice Routes
 
 // Health Check
 app.get('/', (req, res) => {

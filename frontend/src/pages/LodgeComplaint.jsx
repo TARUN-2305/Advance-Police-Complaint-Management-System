@@ -3,14 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import AuthContext from '../context/AuthContext';
 import api from '../api/axios';
 import {
-    Menu, User as UserIcon, LogOut, MapPin, Calendar, Paperclip, Loader
+    Menu, User as UserIcon, LogOut, MapPin, Calendar, Paperclip, Loader, Mic
 } from 'lucide-react';
+import VoiceRecorder from '../components/VoiceRecorder'; // Import VoiceRecorder
 
 const LodgeComplaint = () => {
     const { user, logout } = useContext(AuthContext);
     const navigate = useNavigate();
     const fileInputRef = useRef(null);
     const [loading, setLoading] = useState(false);
+    const [showVoiceRecorder, setShowVoiceRecorder] = useState(false); // State for modal
 
     const [formData, setFormData] = useState({
         title: '', description: '', incident_location: '', category: 'General', incident_date: ''
@@ -52,8 +54,36 @@ const LodgeComplaint = () => {
         }
     };
 
+    const [aiAnalysis, setAiAnalysis] = useState(null);
+
+    const handleVoiceAnalysis = (data, transcript) => {
+        setAiAnalysis({
+            score: data.severity_score,
+            explanation: data.severity_explanation,
+            urgency: data.urgency
+        });
+
+        setFormData({
+            ...formData,
+            title: data.incident_type ? `${data.incident_type} Incident` : formData.title,
+            description: data.description || transcript || formData.description,
+            incident_location: data.incident_location || formData.incident_location,
+            incident_date: data.incident_date || formData.incident_date,
+            category: data.incident_type || formData.category
+        });
+        setShowVoiceRecorder(false);
+    };
+
     return (
         <div className="min-h-screen bg-background font-sans">
+            {/* Voice Recorder Modal */}
+            {showVoiceRecorder && (
+                <VoiceRecorder
+                    onAnalysisComplete={handleVoiceAnalysis}
+                    onClose={() => setShowVoiceRecorder(false)}
+                />
+            )}
+
             {/* Header - Dark Blue Bar */}
             <header className="bg-header h-16 flex items-center justify-between px-6 text-white shadow-md">
                 <div className="flex items-center gap-4">
@@ -73,9 +103,43 @@ const LodgeComplaint = () => {
             {/* Main Form Area */}
             <main className="flex items-center justify-center p-8 min-h-[calc(100vh-64px)]">
                 <div className="bg-white rounded-lg shadow-card w-full max-w-2xl overflow-hidden animate-fade-in">
-                    <div className="px-8 py-6 border-b border-gray-100 bg-gray-50/50">
+                    <div className="px-8 py-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
                         <h1 className="text-xl font-bold text-gray-800 uppercase tracking-wide">Lodge Complaint</h1>
+                        <button
+                            onClick={() => setShowVoiceRecorder(true)}
+                            className="flex items-center gap-2 text-sm bg-blue-50 text-blue-600 px-3 py-2 rounded hover:bg-blue-100 transition-colors border border-blue-200"
+                        >
+                            <Mic className="w-4 h-4" /> Register via Voice
+                        </button>
                     </div>
+
+                    {/* AI Analysis Result */}
+                    {aiAnalysis && (
+                        <div className="mx-8 mt-6 p-4 bg-blue-50/50 border border-blue-100 rounded-lg flex flex-col gap-2">
+                            <div className="flex justify-between items-start">
+                                <h3 className="text-sm font-bold text-blue-800 flex items-center gap-2">
+                                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                                    AI Severity Analysis
+                                </h3>
+                                <span className={`text-xs font-bold px-2 py-1 rounded ${aiAnalysis.urgency === 'HIGH' ? 'bg-red-100 text-red-600' :
+                                        aiAnalysis.urgency === 'MEDIUM' ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'
+                                    }`}>
+                                    {aiAnalysis.urgency} URGENCY
+                                </span>
+                            </div>
+
+                            <div className="flex items-center gap-4 mt-1">
+                                <div className="flex flex-col">
+                                    <span className="text-xs text-gray-500 uppercase font-bold">Severity Score</span>
+                                    <span className="text-2xl font-black text-gray-700">{aiAnalysis.score}<span className="text-sm text-gray-400 font-normal">/10</span></span>
+                                </div>
+                                <div className="h-8 w-px bg-gray-200"></div>
+                                <p className="text-sm text-gray-600 italic">
+                                    "{aiAnalysis.explanation}"
+                                </p>
+                            </div>
+                        </div>
+                    )}
 
                     <form onSubmit={handleSubmit} className="p-8 space-y-6">
 
